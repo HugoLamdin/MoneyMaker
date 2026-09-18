@@ -1,0 +1,813 @@
+openapi: 3.1.0
+info:
+  title: Api
+  version: 0.1.0
+  description: API for the UK Quant Dashboard paper-trading workspace
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: auth
+    description: Account registration and session operations
+  - name: dashboard
+    description: Portfolio overview and market signals
+  - name: cash
+    description: Mock GBP cash operations
+  - name: settings
+    description: Trading mode and safety settings
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+  /auth/register:
+    post:
+      operationId: register
+      tags: [auth]
+      summary: Register a new local account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthCredentials"
+      responses:
+        "201":
+          description: Account created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "409":
+          description: Email already registered
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Log in to a local account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthCredentials"
+      responses:
+        "200":
+          description: Authenticated session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid credentials
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: End the current local session
+      responses:
+        "204":
+          description: Session ended
+  /auth/me:
+    get:
+      operationId: getCurrentUser
+      tags: [auth]
+      summary: Get the current authenticated user
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          description: Not authenticated
+  /dashboard:
+    get:
+      operationId: getDashboard
+      tags: [dashboard]
+      summary: Get the current portfolio, market data, and signal log
+      responses:
+        "200":
+          description: Dashboard data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dashboard"
+        "401":
+          description: Not authenticated
+  /backtest/custom-cost:
+    get:
+      operationId: getCustomTradingCosts
+      tags: [dashboard]
+      summary: Get the authenticated user's latest custom broker cost assumptions
+      description: These saved assumptions are comparison-only and never affect strategy selection, the base safety gate, or live eligibility.
+      responses:
+        "200":
+          description: Latest saved assumptions, or null when the user has not compared custom costs
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/CustomTradingCostInput"
+                  - type: "null"
+        "401":
+          description: Not authenticated
+    post:
+      operationId: compareCustomTradingCosts
+      tags: [dashboard]
+      summary: Compare the selected strategy's holdout return using custom broker costs
+      description: Saves the authenticated user's latest assumptions, then compares them. The custom costs are comparison-only and never affect development-period strategy selection, the base safety gate, or live eligibility.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CustomTradingCostInput"
+      responses:
+        "200":
+          description: Custom-cost holdout comparison
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomCostScenarioResult"
+        "400":
+          description: Invalid custom trading costs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Not authenticated
+  /assets:
+    get:
+      operationId: getAssets
+      tags: [dashboard]
+      summary: Get simulated UK market assets and indicator data
+      responses:
+        "200":
+          description: Market assets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Asset"
+        "401":
+          description: Not authenticated
+  /signals:
+    get:
+      operationId: getSignals
+      tags: [dashboard]
+      summary: Get the current user's paper-trading signal log
+      responses:
+        "200":
+          description: Signal history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Signal"
+        "401":
+          description: Not authenticated
+  /cash/deposit:
+    post:
+      operationId: depositCash
+      tags: [cash]
+      summary: Deposit mock GBP cash
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CashInput"
+      responses:
+        "200":
+          description: Updated cash balance
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CashBalance"
+        "400":
+          description: Invalid amount
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Not authenticated
+  /cash/withdraw:
+    post:
+      operationId: withdrawCash
+      tags: [cash]
+      summary: Withdraw mock GBP cash
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CashInput"
+      responses:
+        "200":
+          description: Updated cash balance
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CashBalance"
+        "400":
+          description: Invalid amount or insufficient balance
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/ValidationError"
+                  - $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Not authenticated
+  /trading-mode:
+    get:
+      operationId: getTradingMode
+      tags: [settings]
+      summary: Get the current trading mode and broker readiness
+      responses:
+        "200":
+          description: Trading mode state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TradingMode"
+        "401":
+          description: Not authenticated
+    post:
+      operationId: setTradingMode
+      tags: [settings]
+      summary: Change between paper and live trading modes
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TradingModeInput"
+      responses:
+        "200":
+          description: Updated trading mode state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TradingMode"
+        "400":
+          description: Invalid mode
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Not authenticated
+        "409":
+          description: Live mode requires a verified supported broker connection
+  /risk-settings:
+    put:
+      operationId: updateRiskSettings
+      tags: [settings]
+      summary: Update automatic paper-strategy risk limits
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RiskSettingsInput"
+      responses:
+        "200":
+          description: Updated dashboard data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dashboard"
+        "400":
+          description: Invalid risk settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Not authenticated
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+    AuthCredentials:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+    User:
+      type: object
+      required: [id, email, createdAt]
+      properties:
+        id:
+          type: integer
+        email:
+          type: string
+        createdAt:
+          type: string
+    AuthResponse:
+      type: object
+      required: [user]
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+    ValidationError:
+      type: object
+      required: [error, code, fields]
+      properties:
+        error:
+          type: string
+          enum: ["Invalid request."]
+          description: Stable summary retained for clients that only display the top-level error string.
+        code:
+          type: string
+          enum: [VALIDATION_ERROR]
+        fields:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/ValidationFieldError"
+    ValidationFieldError:
+      type: object
+      required: [field, code, message]
+      properties:
+        field:
+          type: string
+          description: Dot-separated request field path, or request when the issue applies to the whole body.
+        code:
+          type: string
+          enum: [INVALID_VALUE, REQUIRED]
+        message:
+          type: string
+          enum: ["Enter a valid value.", "This field is required."]
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+    Asset:
+      type: object
+      required: [symbol, name, price, change, changePercent, sma50, movingAverageSessions, signalBandPercent, trend, action, chart, assetClass, executionCalendar]
+      properties:
+        symbol:
+          type: string
+        name:
+          type: string
+        price:
+          type: number
+        change:
+          type: number
+        changePercent:
+          type: number
+        sma50:
+          type: number
+        movingAverageSessions:
+          type: integer
+        signalBandPercent:
+          type: number
+        trend:
+          type: string
+          enum: [UPTREND, DOWNTREND, NEUTRAL]
+        action:
+          type: string
+          enum: [BUY, SELL, HOLD]
+        chart:
+          type: array
+          items:
+            type: number
+        assetClass:
+          type: string
+          enum: [BENCHMARK, EQUITY, CRYPTO]
+        executionCalendar:
+          type: string
+          enum: [UK_COMMON_SESSION, CRYPTO_24_7]
+    Signal:
+      type: object
+      required: [id, symbol, name, action, orderType, status, price, sma50, createdAt, scheduledExecutionAt, reason]
+      properties:
+        id:
+          type: integer
+        symbol:
+          type: string
+        name:
+          type: string
+        action:
+          type: string
+          enum: [BUY, SELL]
+        orderType:
+          type: string
+          enum: [SIGNAL, STOP_LOSS]
+        status:
+          type: string
+          enum: [PENDING, COMPLETED]
+        price:
+          type: number
+        sma50:
+          type: number
+        createdAt:
+          type: string
+          format: date-time
+        scheduledExecutionAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: UTC date marker for the market session when the paper order first becomes eligible to execute.
+        reason:
+          type: string
+    Dashboard:
+      type: object
+      required: [user, cash, invested, totalValue, dailyPnl, assets, signals, positions, riskSettings, backtest, priceRevisionAudit]
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+        cash:
+          type: number
+        invested:
+          type: number
+        totalValue:
+          type: number
+        dailyPnl:
+          type: number
+        assets:
+          type: array
+          items:
+            $ref: "#/components/schemas/Asset"
+        signals:
+          type: array
+          items:
+            $ref: "#/components/schemas/Signal"
+        positions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Position"
+        riskSettings:
+          $ref: "#/components/schemas/RiskSettings"
+        backtest:
+          $ref: "#/components/schemas/BacktestSummary"
+        priceRevisionAudit:
+          type: array
+          description: Read-only record of material historical price revisions that were explicitly approved during an import.
+          items:
+            $ref: "#/components/schemas/PriceRevisionAuditEntry"
+    PriceRevisionAuditEntry:
+      type: object
+      required: [symbol, marketDate, oldPrice, newPrice, percentageChange, approvalDate]
+      properties:
+        symbol:
+          type: string
+        marketDate:
+          type: string
+          description: Market session date in YYYY-MM-DD format.
+        oldPrice:
+          type: number
+        newPrice:
+          type: number
+        percentageChange:
+          type: number
+        approvalDate:
+          type: string
+          description: Approval date in YYYY-MM-DD format.
+    Position:
+      type: object
+      required: [id, symbol, name, quantity, averagePrice, currentPrice, marketValue, unrealizedPnl]
+      properties:
+        id:
+          type: integer
+        symbol:
+          type: string
+        name:
+          type: string
+        quantity:
+          type: number
+        averagePrice:
+          type: number
+        currentPrice:
+          type: number
+        marketValue:
+          type: number
+        unrealizedPnl:
+          type: number
+    CashInput:
+      type: object
+      required: [amount]
+      properties:
+        amount:
+          type: number
+          exclusiveMinimum: 0
+    CashBalance:
+      type: object
+      required: [cash]
+      properties:
+        cash:
+          type: number
+    TradingMode:
+      type: object
+      required: [mode, brokerProvider, brokerConfigured, brokerReady, historicalPolicyReady, blockers, liveTradingAvailable]
+      properties:
+        mode:
+          type: string
+          enum: [PAPER, LIVE]
+        brokerProvider:
+          type: ["string", "null"]
+        brokerConfigured:
+          type: boolean
+        brokerReady:
+          type: boolean
+          description: Whether a supported broker connection is verified and ready for live orders
+        historicalPolicyReady:
+          type: boolean
+          description: Whether every server-side historical safety check currently passes
+        blockers:
+          type: array
+          description: User-safe reasons live trading cannot currently be enabled
+          items:
+            $ref: "#/components/schemas/TradingModeBlocker"
+        liveTradingAvailable:
+          type: boolean
+          description: Server-derived readiness result. True only when every current live-trading safety requirement passes; clients must not infer or override it.
+    TradingModeBlocker:
+      type: object
+      required: [code, message, action]
+      properties:
+        code:
+          type: string
+          description: Stable server-owned identifier for the failed readiness check
+        message:
+          type: string
+          description: User-safe explanation of why live trading is unavailable
+        action:
+          type: string
+          description: Dashboard destination that can help the user clear or investigate this blocker
+          enum: [BROKER_SETUP, RISK_SETTINGS, BACKTEST_DETAILS]
+    TradingModeInput:
+      type: object
+      required: [mode]
+      properties:
+        mode:
+          type: string
+          enum: [PAPER, LIVE]
+    RiskSettings:
+      type: object
+      required: [maxPositionPercent, stopLossPercent, cashReservePercent]
+      properties:
+        maxPositionPercent: { type: number }
+        stopLossPercent: { type: number }
+        cashReservePercent: { type: number }
+    RiskSettingsInput:
+      type: object
+      required: [maxPositionPercent, stopLossPercent, cashReservePercent]
+      properties:
+        maxPositionPercent: { type: number, minimum: 5, maximum: 50 }
+        stopLossPercent: { type: number, minimum: 2, maximum: 20 }
+        cashReservePercent: { type: number, minimum: 10, maximum: 60 }
+    CustomTradingCostInput:
+      type: object
+      required: [commissionPerOrder, spreadBpsPerSide, slippageBpsPerSide]
+      additionalProperties: false
+      properties:
+        commissionPerOrder:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: Broker commission charged per order in GBP.
+        spreadBpsPerSide:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: Expected half-spread charged on each side in basis points.
+        slippageBpsPerSide:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: Expected slippage on each side in basis points.
+    CustomCostScenarioResult:
+      type: object
+      required: [id, name, comparisonOnly, controlsSafetyGate, assumptions, netFinalValue, netReturnPercent, tradingCosts, excessReturnPercent, maxDrawdownPercent]
+      properties:
+        id: { type: string, enum: [CUSTOM] }
+        name: { type: string, enum: ["Your broker"] }
+        comparisonOnly:
+          type: boolean
+          enum: [true]
+        controlsSafetyGate:
+          type: boolean
+          enum: [false]
+        assumptions:
+          type: object
+          required: [currency, commissionPerOrder, spreadBpsPerSide, slippageBpsPerSide, stampDutyBpsOnBuys, description]
+          properties:
+            currency: { type: string, enum: [GBP] }
+            commissionPerOrder: { type: number }
+            spreadBpsPerSide: { type: number }
+            slippageBpsPerSide: { type: number }
+            stampDutyBpsOnBuys: { type: number }
+            description: { type: string }
+        netFinalValue: { type: number }
+        netReturnPercent: { type: number }
+        tradingCosts: { type: number }
+        excessReturnPercent: { type: number }
+        maxDrawdownPercent: { type: number }
+    SafetyCheck:
+      type: object
+      required: [label, passed, actual, limit, comparison]
+      properties:
+        label: { type: string }
+        passed: { type: boolean }
+        actual: { type: number }
+        limit: { type: number }
+        comparison:
+          type: string
+          enum: [MAX, MIN, GT]
+    MarketRegimeResult:
+      type: object
+      required: [regime, startDate, endDate, sessions, returnPercent, benchmarkReturnPercent, maxDrawdownPercent]
+      properties:
+        regime:
+          type: string
+          enum: [BULL, BEAR, SIDEWAYS]
+        startDate: { type: string, format: date }
+        endDate: { type: string, format: date }
+        sessions: { type: integer }
+        returnPercent: { type: number }
+        benchmarkReturnPercent: { type: number }
+        maxDrawdownPercent: { type: number }
+    BacktestSummary:
+      type: object
+      required: [dataSource, priceField, snapshotAsOfDate, snapshotAgeDays, startDate, endDate, executionLagSessions, periodDays, initialCapital, finalValue, returnPercent, grossFinalValue, grossReturnPercent, netFinalValue, netReturnPercent, tradingCosts, costAssumptions, defaultSafetyScenario, costScenarios, executionCostThreshold, benchmarkReturnPercent, excessReturnPercent, maxDrawdownPercent, winRatePercent, turnoverPercent, closedTrades, safetyPassed, safetyChecks, benchmarkPolicy, methodology, candidates, regimes]
+      properties:
+        dataSource: { type: string }
+        priceField: { type: string }
+        snapshotAsOfDate: { type: string, format: date }
+        snapshotAgeDays: { type: integer, minimum: 0 }
+        startDate: { type: string, format: date }
+        endDate: { type: string, format: date }
+        executionLagSessions: { type: integer }
+        periodDays: { type: integer }
+        initialCapital: { type: number }
+        finalValue: { type: number }
+        returnPercent: { type: number }
+        grossFinalValue: { type: number }
+        grossReturnPercent: { type: number }
+        netFinalValue: { type: number }
+        netReturnPercent: { type: number }
+        tradingCosts: { type: number }
+        costAssumptions:
+          type: object
+          description: Conservative explicit assumptions applied to every simulated UK share order.
+          required: [currency, commissionPerOrder, spreadBpsPerSide, slippageBpsPerSide, stampDutyBpsOnBuys, description]
+          properties:
+            currency: { type: string, enum: [GBP] }
+            commissionPerOrder: { type: number }
+            spreadBpsPerSide: { type: number }
+            slippageBpsPerSide: { type: number }
+            stampDutyBpsOnBuys: { type: number }
+            description: { type: string }
+        defaultSafetyScenario:
+          type: string
+          enum: [BASE]
+          description: The cost scenario whose result controls the top-level safety gate.
+        costScenarios:
+          type: array
+          description: Holdout stress test of the selected development winner. Scenario results never affect strategy selection.
+          items:
+            type: object
+            required: [id, name, assumptions, netFinalValue, netReturnPercent, tradingCosts, excessReturnPercent, maxDrawdownPercent, safetyPassed]
+            properties:
+              id: { type: string, enum: [LOW, BASE, HIGH] }
+              name: { type: string }
+              assumptions:
+                type: object
+                required: [currency, commissionPerOrder, spreadBpsPerSide, slippageBpsPerSide, stampDutyBpsOnBuys, description]
+                properties:
+                  currency: { type: string, enum: [GBP] }
+                  commissionPerOrder: { type: number }
+                  spreadBpsPerSide: { type: number }
+                  slippageBpsPerSide: { type: number }
+                  stampDutyBpsOnBuys: { type: number }
+                  description: { type: string }
+              netFinalValue: { type: number }
+              netReturnPercent: { type: number }
+              tradingCosts: { type: number }
+              excessReturnPercent: { type: number }
+              maxDrawdownPercent: { type: number }
+              safetyPassed: { type: boolean }
+        executionCostThreshold:
+          type: object
+          description: Break-even search over broker-controlled execution costs for the fixed development winner. Commission, spread, and slippage scale together from the base assumptions; statutory stamp duty stays fixed. The full holdout safety policy is evaluated without strategy reselection.
+          required: [status, maximumPassingMultiplier, headroomFromBaseMultiplier, thresholdAssumptions, lowerBoundMultiplier, upperBoundMultiplier, precisionMultiplier, explanation]
+          properties:
+            status:
+              type: string
+              enum: [FOUND, ABOVE_SEARCH_BOUND, NO_PASSING_LEVEL]
+            maximumPassingMultiplier:
+              type: [number, "null"]
+              description: Highest passing multiplier found, or null when no level passes. For ABOVE_SEARCH_BOUND this is the tested lower bound, not the true maximum.
+            headroomFromBaseMultiplier:
+              type: [number, "null"]
+              description: Maximum passing multiplier minus the 1x base assumption.
+            thresholdAssumptions:
+              type: [object, "null"]
+              required: [currency, commissionPerOrder, spreadBpsPerSide, slippageBpsPerSide, stampDutyBpsOnBuys, description]
+              properties:
+                currency: { type: string, enum: [GBP] }
+                commissionPerOrder: { type: number }
+                spreadBpsPerSide: { type: number }
+                slippageBpsPerSide: { type: number }
+                stampDutyBpsOnBuys: { type: number }
+                description: { type: string }
+            lowerBoundMultiplier: { type: number, description: Inclusive search lower bound. }
+            upperBoundMultiplier: { type: number, description: Inclusive search upper bound. }
+            precisionMultiplier: { type: number, description: Maximum multiplier interval remaining when the binary search stops. }
+            explanation: { type: string }
+        benchmarkReturnPercent: { type: number }
+        excessReturnPercent: { type: number }
+        maxDrawdownPercent: { type: number }
+        winRatePercent: { type: number }
+        turnoverPercent: { type: number }
+        closedTrades: { type: integer }
+        safetyPassed: { type: boolean }
+        safetyChecks:
+          type: array
+          items:
+            $ref: "#/components/schemas/SafetyCheck"
+        benchmarkPolicy:
+          type: object
+          description: Mandatory benchmark-relative policy used by the holdout approval gate.
+          required: [benchmark, requiredMinimumExcessReturnPercent, passed, rationale]
+          properties:
+            benchmark: { type: string, enum: [FTSE 100] }
+            requiredMinimumExcessReturnPercent:
+              type: number
+              description: Exclusive lower bound; excess return must be greater than this value.
+            passed: { type: boolean }
+            rationale: { type: string }
+        methodology:
+          type: object
+          required: [splitDate, developmentStartDate, developmentEndDate, holdoutStartDate, holdoutEndDate, selectionRule, selectedStrategyId, selectedStrategyName]
+          properties:
+            splitDate: { type: string, format: date }
+            developmentStartDate: { type: string, format: date }
+            developmentEndDate: { type: string, format: date }
+            holdoutStartDate: { type: string, format: date }
+            holdoutEndDate: { type: string, format: date }
+            selectionRule: { type: string }
+            selectedStrategyId: { type: string }
+            selectedStrategyName: { type: string }
+        candidates:
+          type: array
+          items:
+            type: object
+            required: [id, name, movingAverageSessions, signalBandPercent, stopLossPercent, cashReservePercent, developmentGrossReturnPercent, developmentNetReturnPercent, developmentMaxDrawdownPercent, developmentTurnoverPercent, holdoutGrossReturnPercent, holdoutNetReturnPercent, holdoutBenchmarkReturnPercent, holdoutMaxDrawdownPercent, holdoutTurnoverPercent, selected]
+            properties:
+              id: { type: string }
+              name: { type: string }
+              movingAverageSessions: { type: integer }
+              signalBandPercent: { type: number }
+              stopLossPercent: { type: number }
+              cashReservePercent: { type: number }
+              developmentGrossReturnPercent: { type: number }
+              developmentNetReturnPercent: { type: number }
+              developmentMaxDrawdownPercent: { type: number }
+              developmentTurnoverPercent: { type: number }
+              holdoutGrossReturnPercent: { type: number }
+              holdoutNetReturnPercent: { type: number }
+              holdoutBenchmarkReturnPercent: { type: number }
+              holdoutMaxDrawdownPercent: { type: number }
+              holdoutTurnoverPercent: { type: number }
+              selected: { type: boolean }
+        regimes:
+          type: array
+          items:
+            $ref: "#/components/schemas/MarketRegimeResult"
