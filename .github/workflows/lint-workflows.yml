@@ -1,3 +1,4 @@
+# Verification PR for required workflow validation
 name: Lint GitHub Actions workflows
 on:
   pull_request:
@@ -6,8 +7,6 @@ on:
   push:
     branches:
       - main
-    paths:
-      - ".github/workflows/**"
   workflow_dispatch:
 permissions:
   contents: read
