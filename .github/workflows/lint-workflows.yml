@@ -1,3 +1,4 @@
+# Verification PR for required workflow validation
 name: Lint GitHub Actions workflows
 on:
   pull_request:
