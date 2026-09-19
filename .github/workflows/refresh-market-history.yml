@@ -1,22 +1,62 @@
-name: Lint GitHub Actions workflows
+name: Refresh market history
+
 on:
-  pull_request:
-  push:
-    branches:
-      - main
-    paths:
-      - ".github/workflows/**"
+  schedule:
+    # Keep comfortably inside the seven-day freshness window.
+    - cron: "17 6 */3 * *"
   workflow_dispatch:
+
+concurrency:
+  group: refresh-market-history
+  cancel-in-progress: false
+
 permissions:
-  contents: read
+  contents: write
+  pull-requests: write
+
 jobs:
-  actionlint:
-    name: Validate workflow configuration
+  refresh:
+    name: Refresh and propose snapshot update
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
+
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
-      - name: Run actionlint
-        uses: docker://rhysd/actionlint:1.7.12
-        
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Refresh validated market history
+        run: pnpm --filter @workspace/api-server run history:refresh
+
+      - name: Open or update review pull request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: automation/refresh-market-history
+          delete-branch: true
+          commit-message: "Refresh validated UK market history"
+          title: "Refresh validated UK market history"
+          body: |
+            Automated refresh of the checked-in UK adjusted-price snapshot.
+
+            The importer fetched the configured Yahoo Finance series and validated
+            their metadata, coverage, dates, and prices before replacing the snapshot.
+          add-paths: artifacts/api-server/src/data/uk-adjusted-history.json
+
+      - name: Report refresh failure
+        if: failure()
+        run: |
+          {
+            echo "## Market history refresh failed"
+            echo
+            echo "The checked-in snapshot was not changed. Review the failed step and rerun this workflow before the seven-day freshness limit expires."
+          } >> "$GITHUB_STEP_SUMMARY"
