@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "UK Quant Dashboard"
+description = "A full-stack quantitative trend-following dashboard for UK residents, with self-contained accounts, simulated GBP market data, paper trading signals, and mock cash controls."
+version = "1.0.0"
+id = "artifacts/uk-quant-dashboard"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 23671
+
+[services.development]
+run = "pnpm --filter @workspace/uk-quant-dashboard run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/uk-quant-dashboard", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/uk-quant-dashboard/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "23671"
+BASE_PATH = "/"
