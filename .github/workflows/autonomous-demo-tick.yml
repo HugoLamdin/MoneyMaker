@@ -1,0 +1,32 @@
+name: Autonomous DEMO tick
+
+on:
+  schedule:
+    - cron: "30 17 * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: autonomous-demo-tick
+  cancel-in-progress: false
+
+jobs:
+  tick:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Request OIDC token and trigger tick
+        run: |
+          set -euo pipefail
+          oidc_response="$(curl --fail-with-body --silent --show-error \
+            -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=autonomous-demo-scheduler")"
+          token="$(printf '%s' "$oidc_response" | jq -er '.value')"
+          curl --fail-with-body --silent --show-error \
+            -X POST \
+            -H "Authorization: Bearer ${token}" \
+            -H "Accept: application/json" \
+            https://HugoAGOGO.replit.app/api/internal/autonomous-demo/tick
