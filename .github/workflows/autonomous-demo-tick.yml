@@ -2,7 +2,9 @@ name: Autonomous DEMO tick
 
 on:
   schedule:
-    - cron: "30 17 * * 1-5"
+    # Covers London market hours across GMT and BST.
+    # The API rejects calls outside the actual market session.
+    - cron: "*/15 7-16 * * 1-5"
   workflow_dispatch:
 
 permissions:
